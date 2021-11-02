@@ -1,4 +1,4 @@
-include("/home/wanglab/Programs/WhiskerTask/WhiskerTask.jl")
+include("/home/wanglab/Documents/WhiskerTask2/WhiskerTask.jl")
 
 myt=Task_CameraTask()
 myfpga=FPGA(1,[0],usb3=true)
