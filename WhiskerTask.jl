@@ -37,6 +37,8 @@ mutable struct Task_CameraTask <: Intan.Task
     c::Gtk.GtkCanvasLeaf #View Canvas
     l_button::Gtk.GtkToggleButtonLeaf #Laser Button
     plot_frame::Array{UInt32,2}
+    h::Int32
+    w::Int32
     n_camera::Int32
     #Phototag Laser Control
 end
@@ -109,7 +111,7 @@ function Task_CameraTask(w=640,h=480,n_camera=1)
     handles = Task_CameraTask(cam,win,c_button,v_button,
     stim_button,stim_pulse_width,stim_period,stim_pulses,calc_impedance_button,
     impedance_label,impedance_voltage_label,impedance_current,Impedance(),250,3000,0,false,
-    c,l_button,zeros(UInt32,w,h*n_camera),n_camera)
+    c,l_button,zeros(UInt32,w,h*n_camera),w,h,n_camera)
 
     sleep(5.0)
 
@@ -122,6 +124,10 @@ function connect_cb(widget::Ptr,user_data::Tuple{Task_CameraTask})
    han, = user_data
 
     connect(han.cam)
+
+    sleep(1.0)
+
+    BaslerCamera.change_resolution(han.cam.cam,han.w,han.h)
 
     start_acquisition(han.cam)
 
@@ -378,7 +384,7 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     signal_connect(change_period,myt.stim_period_button,"value-changed",Nothing,(),false,(myt,fpga[1]))
     signal_connect(stim_cb,myt.stim_button,"toggled",Nothing,(),false,(myt,fpga[1]))
 
-    change_ffmpeg_folder(myt.cam,rhd.save.folder)
+    change_ffmpeg_folder(myt.cam.cam,rhd.save.folder)
 
     #For this experiment, we want to be recording voltage, timestamps, and TTLs
     set_gtk_property!(han.save_widgets.ts,:active,true)
@@ -409,7 +415,7 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     fpga[1].d[2].numPulses=1
     fpga[1].d[2].postTriggerDelay=0
     fpga[1].d[2].firstPhaseDuration=2000 #2 ms
-    fpga[1].d[2].refractoryPeriod=8000
+    fpga[1].d[2].refractoryPeriod=48000
     Intan.update_digital_output(fpga[1],fpga[1].d[2])
 
     #TTL 3 is juxtacellular stimulation
@@ -441,7 +447,7 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
 
     #Draw Picture
     if (myread)
-        (myimage,grabbed) = get_data(myt.cam)
+        (myimage,grabbed) = BaslerCamera.get_camera_data(myt.cam.cam,myt.w,myt.h,myt.n_camera)
 
         if (grabbed)
             plot_image(myt,myimage)
