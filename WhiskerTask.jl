@@ -12,34 +12,33 @@ end
 
 Impedance()=Impedance(falses(Intan.SAMPLES_PER_DATA_BLOCK),1,1.0,1.0,1.0,1.0)
 
+mutable struct cam_param
+    c::Gtk.GtkCanvasLeaf
+    serial::String
+    trigger::Int64
+    frame_period::Float64
+end
+
+cam_param() = cam_param(Canvas(20,20),"",1,20.0)
+
 #=
 Data structure
 should be a subtype of Task abstract type
 =#
 mutable struct Task_CameraTask <: Intan.Task
     cam::Camera
-    win::Gtk.GtkWindowLeaf #Window
-    c_button::Gtk.GtkButtonLeaf #Connect Button
-    v_button::Gtk.GtkToggleButtonLeaf #View Button
-    stim_button::Gtk.GtkToggleButtonLeaf
-    stim_pulse_width_button::Gtk.GtkSpinButtonLeaf
-    stim_period_button::Gtk.GtkSpinButtonLeaf
-    stim_pulses_button::Gtk.GtkSpinButtonLeaf
-    calculate_impedance::Gtk.GtkCheckButtonLeaf
-    impedance_label::Gtk.GtkLabelLeaf
-    impedance_voltage_label::Gtk.GtkLabelLeaf
-    impedance_current::Gtk.GtkSpinButtonLeaf
+    b::Gtk.GtkBuilder
     impedance::Impedance
     pw::Int64
     period::Int64
     stim_start_time::Float64
     in_stim::Bool
     c::Gtk.GtkCanvasLeaf #View Canvas
-    l_button::Gtk.GtkToggleButtonLeaf #Laser Button
     plot_frame::Array{UInt32,2}
     h::Int32
     w::Int32
     n_camera::Int32
+    cam1_param::cam_param
     #Phototag Laser Control
 end
 
@@ -49,73 +48,25 @@ Constructors for data type
 
 function Task_CameraTask(w=640,h=480,n_camera=1)
 
+    b = Builder(filename="./whiskertask.glade")
+
     cam=Camera(h,w,1,n_camera)
-
-    upper_grid=Grid()
-    grid=Grid()
-
-    c_button = Button("Connect")
-    upper_grid[1,1] = c_button
-
-    v_button = ToggleButton("View")
-    upper_grid[2,1] = v_button
-
-    l_button = ToggleButton("Laser")
-    upper_grid[3,1] = l_button
-
-    stim_button = ToggleButton("Stimulate")
-    upper_grid[4,1] = stim_button
-
-    stim_pulse_width = SpinButton(1:1000)
-    Gtk.GAccessor.value(stim_pulse_width,250)
-    upper_grid[4,2] = stim_pulse_width
-    upper_grid[3,2] = Label("Pulse Width")
-
-    stim_period = SpinButton(1:10000)
-    Gtk.GAccessor.value(stim_period,3000)
-    upper_grid[4,3] = stim_period
-    upper_grid[3,3] = Label("Period")
-
-    stim_pulses = SpinButton(1:1000)
-    Gtk.GAccessor.value(stim_pulses,1)
-    upper_grid[4,4] = stim_pulses
-    upper_grid[3,4] = Label("Num Pulses")
-
-    calc_impedance_button = CheckButton("Calculate Impedance")
-    upper_grid[5,1] = calc_impedance_button
-
-    impedance_current = SpinButton(0.0:0.1:10.0)
-    upper_grid[5,2] = impedance_current
-    upper_grid[6,2] = Label("Current (nA)")
-
-    impedance_grid=Grid()
-    impedance_grid[1,1]=Label("Impedance: ")
-    impedance_label=Label("")
-    impedance_grid[2,1]=impedance_label
-    upper_grid[5,3] = impedance_grid
-
-    impedance_grid[1,2]=Label("Voltage (mV): ")
-    impedance_voltage_label=Label("")
-    impedance_grid[2,2]=impedance_voltage_label
-
-    grid[1,1] = upper_grid
+    cam_param1 = cam_param()
+    push!(b["cam_1_active_box"],cam_param1.c)
 
     c=Canvas(-1,-1)
 
-    grid[1,2] = c
+    push!(b["cam_1_box"], c)
     Gtk.GAccessor.hexpand(c,true)
     Gtk.GAccessor.vexpand(c,true)
 
-    win = Window(grid, "Control") |> Gtk.showall
-
-    handles = Task_CameraTask(cam,win,c_button,v_button,
-    stim_button,stim_pulse_width,stim_period,stim_pulses,calc_impedance_button,
-    impedance_label,impedance_voltage_label,impedance_current,Impedance(),250,3000,0,false,
-    c,l_button,zeros(UInt32,w,h*n_camera),w,h,n_camera)
+    handles = Task_CameraTask(cam,b,Impedance(),250,3000,0,false,
+    c,zeros(UInt32,w,h*n_camera),w,h,n_camera,cam_param1)
 
     sleep(5.0)
 
-    plot_image(handles,zeros(UInt8,w,h*n_camera))
+    #plot_image(handles,zeros(UInt8,w,h*n_camera))
+    Gtk.showall(handles.b["win"])
 
     handles
 end
@@ -123,9 +74,14 @@ end
 function connect_cb(widget::Ptr,user_data::Tuple{Task_CameraTask})
    han, = user_data
 
+   #change_camera_config(han.cam,path)
+   #Open by serial number
     connect(han.cam)
 
     sleep(1.0)
+
+    draw_circle(han.cam1_param,(0,1,0))
+    #set_gtk_property!(han.b["cam1_connect_label"],:label,"Connected")
 
     BaslerCamera.change_resolution(han.cam.cam,han.w,han.h)
 
@@ -138,7 +94,7 @@ function view_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,FPGA})
 
     han,fpga = user_data
 
-    if get_gtk_property(han.v_button,:active,Bool)
+    if get_gtk_property(han.b["view_button"],:active,Bool)
         Intan.manual_trigger(fpga,0,true)
     else
         #End TTL
@@ -165,9 +121,9 @@ end
 
 function update_stimulation_parameters(han,fpga)
 
-    han.pw = get_gtk_property(han.stim_pulse_width_button,:value,Int64)
-    han.period = get_gtk_property(han.stim_period_button,:value,Int64)
-    num_pulses = get_gtk_property(han.stim_pulses_button,:value,Int64)
+    han.pw = get_gtk_property(han.b["stim_pw_adj"],:value,Int64)
+    han.period = get_gtk_property(han.b["stim_period_adj"],:value,Int64)
+    num_pulses = get_gtk_property(han.b["stim_pulses_adj"],:value,Int64)
 
     if num_pulses == 1
         fpga.d[3].pulseOrTrain = 0
@@ -227,7 +183,7 @@ function laser_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,FPGA})
 
     han,fpga = user_data
 
-    if get_gtk_property(han.l_button,:active,Bool)
+    if get_gtk_property(han.b["laser_button"],:active,Bool)
         Intan.manual_trigger(fpga,1,true)
     else
         Intan.manual_trigger(fpga,1,false)
@@ -240,7 +196,7 @@ function stim_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,FPGA})
 
     han,fpga = user_data
 
-    if get_gtk_property(han.stim_button,:active,Bool)
+    if get_gtk_property(han.b["stimulator_button"],:active,Bool)
         update_stimulation_parameters(han,fpga)
         Intan.manual_trigger(fpga,2,true)
     else
@@ -271,8 +227,8 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
 
         #If camera is in view mode, we will be collecting frames already
         #Turn off briefly
-        if get_gtk_property(myt.v_button,:active,Bool)
-            set_gtk_property!(myt.v_button,:active,false)
+        if get_gtk_property(myt.b["view_button"],:active,Bool)
+            set_gtk_property!(myt.b["view_button"],:active,false)
         end
 
         #We wait here for everything to power down. Ideally we could flush the camera
@@ -285,12 +241,12 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
         sleep(1.0)
 
         #Start TTL
-        set_gtk_property!(myt.v_button,:active,true)
+        set_gtk_property!(myt.b["view_button"],:active,true)
 
     else #turn off
 
         #Turn off camera
-        set_gtk_property!(myt.v_button,:active,false)
+        set_gtk_property!(myt.b["view_button"],:active,false)
 
         #Let ffmpeg finish
         sleep(2.0)
@@ -334,9 +290,9 @@ function calculate_impedance(myt,fpga)
     adc_input=6
     stim_control_ttl=3
 
-    if get_gtk_property(myt.calculate_impedance,:active,Bool)
+    if get_gtk_property(myt.b["calc_impedance_button"],:active,Bool)
 
-        myt.impedance.current = get_gtk_property(myt.impedance_current,:value,Float64)
+        myt.impedance.current = get_gtk_property(myt.b["impedance_current_adj"],:value,Float64)
 
         for i=1:length(fpga.ttlout)
             myt.impedance.pulses[i]=false
@@ -351,15 +307,25 @@ function calculate_impedance(myt,fpga)
             dv = myt.impedance.stim_voltage - myt.impedance.base_voltage
             dv = dv * (10.24*2) / typemax(UInt16) * 1000
             myt.impedance.impedance = round(dv / myt.impedance.current,digits=2)
-            set_gtk_property!(myt.impedance_label,:label,string(myt.impedance.impedance))
+            set_gtk_property!(myt.b["impedance_label"],:label,string(myt.impedance.impedance))
         else
             myt.impedance.base_voltage=mean(fpga.adc[.!myt.impedance.pulses,adc_input])
             v = myt.impedance.base_voltage * (10.24*2) / typemax(UInt16) * 1000
-            set_gtk_property!(myt.impedance_voltage_label,:label,string(round(v,digits=1)))
+            set_gtk_property!(myt.b["impedance_voltage"],:label,string(round(v,digits=1)))
         end
 
 
     end
+end
+
+function draw_circle(cam::cam_param,color::Tuple)
+    ctx = Gtk.getgc(cam.c)
+
+    set_source_rgb(ctx, color...)
+    arc(ctx, 10, 10, 9, 0, 2pi)
+    stroke_preserve(ctx)
+    fill(ctx)
+    reveal(cam.c)
 end
 
 #=
@@ -376,13 +342,13 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     signal_connect(recording_cb, han.record,"toggled",Nothing,(),false,(myt,han,fpga[1],rhd))
 
 
-    signal_connect(connect_cb,myt.c_button,"clicked",Nothing,(),false,(myt,))
-    signal_connect(view_cb,myt.v_button,"toggled",Nothing,(),false,(myt,fpga[1]))
-    signal_connect(laser_cb,myt.l_button,"toggled",Nothing,(),false,(myt,fpga[1]))
+    signal_connect(connect_cb,myt.b["connect_button"],"clicked",Nothing,(),false,(myt,))
+    signal_connect(view_cb,myt.b["view_button"],"toggled",Nothing,(),false,(myt,fpga[1]))
+    signal_connect(laser_cb,myt.b["laser_button"],"toggled",Nothing,(),false,(myt,fpga[1]))
 
-    signal_connect(change_pw,myt.stim_pulse_width_button,"value-changed",Nothing,(),false,(myt,fpga[1]))
-    signal_connect(change_period,myt.stim_period_button,"value-changed",Nothing,(),false,(myt,fpga[1]))
-    signal_connect(stim_cb,myt.stim_button,"toggled",Nothing,(),false,(myt,fpga[1]))
+    signal_connect(change_pw,myt.b["stim_pw_sb"],"value-changed",Nothing,(),false,(myt,fpga[1]))
+    signal_connect(change_period,myt.b["stim_period_sb"],"value-changed",Nothing,(),false,(myt,fpga[1]))
+    signal_connect(stim_cb,myt.b["stimulator_button"],"toggled",Nothing,(),false,(myt,fpga[1]))
 
     change_ffmpeg_folder(myt.cam.cam,rhd.save.folder)
 
@@ -390,6 +356,8 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     set_gtk_property!(han.save_widgets.ts,:active,true)
     set_gtk_property!(han.save_widgets.volt,:active,true)
     set_gtk_property!(han.save_widgets.ttlin,:active,true)
+
+    draw_circle(myt.cam1_param,(1,0,0))
 
     #Stimulation Parameters
     #TTL 1 is camera at 500 fps
