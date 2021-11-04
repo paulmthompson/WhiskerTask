@@ -17,9 +17,13 @@ mutable struct cam_param
     serial::String
     trigger::Int64
     frame_period::Float64
+    connected::Bool
+    plot_frame::Array{UInt32,2}
+    h::Int32
+    w::Int32
 end
 
-cam_param() = cam_param(Canvas(20,20),"",1,20.0)
+cam_param(h,w) = cam_param(Canvas(20,20),"",1,20.0,false,zeros(UInt32,w,h),h,w)
 
 #=
 Data structure
@@ -27,6 +31,7 @@ should be a subtype of Task abstract type
 =#
 mutable struct Task_CameraTask <: Intan.Task
     cam::Camera
+    cam2::Camera
     b::Gtk.GtkBuilder
     impedance::Impedance
     pw::Int64
@@ -34,24 +39,25 @@ mutable struct Task_CameraTask <: Intan.Task
     stim_start_time::Float64
     in_stim::Bool
     c::Gtk.GtkCanvasLeaf #View Canvas
-    plot_frame::Array{UInt32,2}
-    h::Int32
-    w::Int32
+    c2::Gtk.GtkCanvasLeaf
     n_camera::Int32
     cam1_param::cam_param
-    #Phototag Laser Control
+    cam2_param::cam_param
 end
 
 #=
 Constructors for data type
 =#
 
-function Task_CameraTask(w=640,h=480,n_camera=1)
+function Task_CameraTask(config_path = "./config.jl")
+
+    include(config_path)
 
     b = Builder(filename="./whiskertask.glade")
 
-    cam=Camera(h,w,1,n_camera)
-    cam_param1 = cam_param()
+    #Camera 1
+    cam=Camera(cam_1_h,cam_1_w,1,num_cam)
+    cam_param1 = cam_param(cam_1_h,cam_1_w)
     push!(b["cam_1_active_box"],cam_param1.c)
 
     c=Canvas(-1,-1)
@@ -60,12 +66,21 @@ function Task_CameraTask(w=640,h=480,n_camera=1)
     Gtk.GAccessor.hexpand(c,true)
     Gtk.GAccessor.vexpand(c,true)
 
-    handles = Task_CameraTask(cam,b,Impedance(),250,3000,0,false,
-    c,zeros(UInt32,w,h*n_camera),w,h,n_camera,cam_param1)
+    #Camera 2
+    cam2=Camera(cam_2_h,cam_2_w,1,num_cam)
+    cam_param2 = cam_param(cam_2_h,cam_2_w)
+    push!(b["cam_2_active_box"],cam_param2.c)
+
+    c2=Canvas(-1,-1)
+
+    push!(b["cam_2_box"], c2)
+    Gtk.GAccessor.hexpand(c2,true)
+    Gtk.GAccessor.vexpand(c2,true)
+
+    handles = Task_CameraTask(cam,cam2,b,Impedance(),250,3000,0,false,
+    c,c2,num_cam,cam_param1,cam_param2)
 
     sleep(5.0)
-
-    #plot_image(handles,zeros(UInt8,w,h*n_camera))
     Gtk.showall(handles.b["win"])
 
     handles
@@ -74,18 +89,23 @@ end
 function connect_cb(widget::Ptr,user_data::Tuple{Task_CameraTask})
    han, = user_data
 
-   #change_camera_config(han.cam,path)
-   #Open by serial number
-    connect(han.cam)
+   if !han.cam1_param.connected
 
-    sleep(1.0)
+       #change_camera_config(han.cam,path)
+       #Open by serial number
+       connect(han.cam)
 
-    draw_circle(han.cam1_param,(0,1,0))
-    #set_gtk_property!(han.b["cam1_connect_label"],:label,"Connected")
+       sleep(1.0)
 
-    BaslerCamera.change_resolution(han.cam.cam,han.w,han.h)
+       draw_circle(han.cam1_param,(0,1,0))
+       #set_gtk_property!(han.b["cam1_connect_label"],:label,"Connected")
 
-    start_acquisition(han.cam)
+       BaslerCamera.change_resolution(han.cam.cam,han.cam1_param.h,han.cam1_param.w)
+
+       start_acquisition(han.cam)
+
+       han.cam1_param.connected = true
+   end
 
     nothing
 end
@@ -109,7 +129,6 @@ function change_pw(widget::Ptr,user_data::Tuple{Task_CameraTask,FPGA})
     han, fpga = user_data
 
     nothing
-
 end
 
 function change_period(widget::Ptr,user_data::Tuple{Task_CameraTask,FPGA})
@@ -147,7 +166,7 @@ function update_stimulation_parameters(han,fpga)
     nothing
 end
 
-function plot_image(han,img)
+function plot_image(han,img,plot_frame)
 
      ctx=Gtk.getgc(han.c)
 
@@ -158,13 +177,13 @@ function plot_image(han,img)
      Cairo.scale(ctx,c_w/w,c_h/h)
 
      for i=1:length(img)
-        han.plot_frame[i] = (convert(UInt32,img[i]) << 16) | (convert(UInt32,img[i]) << 8) | img[i]
+        plot_frame[i] = (convert(UInt32,img[i]) << 16) | (convert(UInt32,img[i]) << 8) | img[i]
      end
      stride = Cairo.format_stride_for_width(Cairo.FORMAT_RGB24, w)
      @assert stride == 4*w
      surface_ptr = ccall((:cairo_image_surface_create_for_data,Cairo._jl_libcairo),
                  Ptr{Nothing}, (Ptr{Nothing},Int32,Int32,Int32,Int32),
-                 han.plot_frame, Cairo.FORMAT_RGB24, w, h, stride)
+                 plot_frame, Cairo.FORMAT_RGB24, w, h, stride)
 
      ccall((:cairo_set_source_surface,Cairo._jl_libcairo), Ptr{Nothing},
      (Ptr{Nothing},Ptr{Nothing},Float64,Float64), ctx.ptr, surface_ptr, 0, 0)
@@ -254,9 +273,7 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
         end_ffmpeg(myt.cam.cam)
 
         check_alignment(rhd)
-
     end
-
 
     nothing
 end
@@ -415,10 +432,10 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
 
     #Draw Picture
     if (myread)
-        (myimage,grabbed) = BaslerCamera.get_camera_data(myt.cam.cam,myt.w,myt.h,myt.n_camera)
+        (myimage,grabbed) = BaslerCamera.get_camera_data(myt.cam.cam,myt.cam1_param.h,myt.cam1_param.w,1)
 
         if (grabbed)
-            plot_image(myt,myimage)
+            plot_image(myt,myimage,myt.cam1_param.plot_frame)
         end
 
         calculate_impedance(myt,fpga[1])
