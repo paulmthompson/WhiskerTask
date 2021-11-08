@@ -23,7 +23,7 @@ mutable struct cam_param
     w::Int32
 end
 
-cam_param(h,w) = cam_param(Canvas(20,20),"",1,20.0,false,zeros(UInt32,w,h),h,w)
+cam_param(h,w,s="") = cam_param(Canvas(20,20),s,1,20.0,false,zeros(UInt32,w,h),h,w)
 
 #=
 Data structure
@@ -56,8 +56,8 @@ function Task_CameraTask(config_path = "./config.jl")
     b = Builder(filename="./whiskertask.glade")
 
     #Camera 1
-    cam=Camera(cam_1_h,cam_1_w,1,num_cam)
-    cam_param1 = cam_param(cam_1_h,cam_1_w)
+    cam=Camera(cam_1_h,cam_1_w,1,1)
+    cam_param1 = cam_param(cam_1_h,cam_1_w,cam_1_s)
     push!(b["cam_1_active_box"],cam_param1.c)
 
     c=Canvas(-1,-1)
@@ -67,8 +67,8 @@ function Task_CameraTask(config_path = "./config.jl")
     Gtk.GAccessor.vexpand(c,true)
 
     #Camera 2
-    cam2=Camera(cam_2_h,cam_2_w,1,num_cam)
-    cam_param2 = cam_param(cam_2_h,cam_2_w)
+    cam2=Camera(cam_2_h,cam_2_w,1,1)
+    cam_param2 = cam_param(cam_2_h,cam_2_w,cam_2_s)
     push!(b["cam_2_active_box"],cam_param2.c)
 
     c2=Canvas(-1,-1)
@@ -93,7 +93,8 @@ function connect_cb(widget::Ptr,user_data::Tuple{Task_CameraTask})
 
        #change_camera_config(han.cam,path)
        #Open by serial number
-       connect(han.cam)
+       #connect(han.cam)
+       BaslerCamera.connect_camera(han.cam.cam,han.cam1_param.serial)
 
        sleep(1.0)
 
