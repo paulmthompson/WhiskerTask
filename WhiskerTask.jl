@@ -95,6 +95,7 @@ function connect_cb(widget::Ptr,user_data::Tuple{Task_CameraTask})
        #Open by serial number
        #connect(han.cam)
        BaslerCamera.connect_camera(han.cam.cam,han.cam1_param.serial)
+       set_gtk_property!(han.b["cam_1_serial"],:label,han.cam1_param.serial)
 
        sleep(1.0)
 
@@ -167,6 +168,28 @@ function update_stimulation_parameters(han,fpga)
     nothing
 end
 
+function update_pico_parameters(han,fpga)
+
+    period = get_gtk_property(han.b["pico_period_adj"],:value,Int64)
+
+    total_time = 1000
+    pw_ds = .5 # 50% duty cycle
+    pw = round(Int,pw_ds * period)
+    inter_burst_duration = 2 * total_time # 2 seconds between each stim epoch
+    n_p = div(total_time,period)
+
+    fpga.d[5].pulseOrTrain = 1
+    fpga.d[5].numPulses = n_p
+
+    fpga.d[5].firstPhaseDuration = pw * 1000 #On Time
+    fpga.d[5].refractoryPeriod = (inter_burst_duration - (n_p * period) + (period-pw)) * 1000
+    fpga.d[5].pulseTrainPeriod = (period) * 1000
+
+    Intan.update_digital_output(fpga,fpga.d[5])
+
+    nothing
+end
+
 function plot_image(han,img,plot_frame)
 
      ctx=Gtk.getgc(han.c)
@@ -221,6 +244,20 @@ function stim_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,FPGA})
         Intan.manual_trigger(fpga,2,true)
     else
         Intan.manual_trigger(fpga,2,false)
+    end
+
+    nothing
+end
+
+function pico_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,FPGA})
+
+    han, fpga = user_data
+
+    if get_gtk_property(han.b["pico_button"],:active,Bool)
+        update_pico_parameters(han,fpga)
+        Intan.manual_trigger(fpga,4,true)
+    else
+        Intan.manual_trigger(fpga,4,false)
     end
 
     nothing
@@ -346,6 +383,32 @@ function draw_circle(cam::cam_param,color::Tuple)
     reveal(cam.c)
 end
 
+function setup_pico(fpga::FPGA)
+
+    total_time = 1000
+    inter_burst_duration = 2 * total_time
+    n_p = 100
+    pw_ds = 0.5
+    period = 10
+    pw = round(Int,pw_ds * period)
+
+    fpga.d[5].channel=4
+    fpga.d[5].pulseOrTrain = 1
+
+    fpga.d[5].triggerEnabled=1
+    fpga.d[5].triggerSource=28
+
+    fpga.d[5].numPulses = n_p
+    fpga.d[5].postTriggerDelay=0
+    fpga.d[5].firstPhaseDuration=pw * 1000
+    fpga.d[5].refractoryPeriod = (inter_burst_duration - (n_p * period) + (period-pw)) * 1000
+    fpga.d[5].pulseTrainPeriod = (period) * 1000
+
+    Intan.update_digital_output(fpga,fpga.d[5])
+    nothing
+end
+
+
 #=
 Initialization function
 This will build all of the necessary elements before anything starts running
@@ -367,6 +430,8 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     signal_connect(change_pw,myt.b["stim_pw_sb"],"value-changed",Nothing,(),false,(myt,fpga[1]))
     signal_connect(change_period,myt.b["stim_period_sb"],"value-changed",Nothing,(),false,(myt,fpga[1]))
     signal_connect(stim_cb,myt.b["stimulator_button"],"toggled",Nothing,(),false,(myt,fpga[1]))
+
+    signal_connect(pico_cb,myt.b["pico_button"],"toggled",Nothing,(),false,(myt,fpga[1]))
 
     change_ffmpeg_folder(myt.cam.cam,rhd.save.folder)
 
@@ -416,6 +481,8 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     fpga[1].d[3].firstPhaseDuration = 250000 #250 ms
     fpga[1].d[3].refractoryPeriod = 1000000 - 250000#3 seconds
     Intan.update_digital_output(fpga[1],fpga[1].d[3])
+
+    setup_pico(fpga[1])
 
     #set TTL output #4 as high
     Intan.setTtlMode(fpga[1],[false,false,false,true,false,false,false,false])
