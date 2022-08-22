@@ -31,7 +31,6 @@ should be a subtype of Task abstract type
 =#
 mutable struct Task_CameraTask <: Intan.Task
     cam::Camera
-    cam2::Camera
     b::Gtk.GtkBuilder
     impedance::Impedance
     pw::Int64
@@ -39,10 +38,8 @@ mutable struct Task_CameraTask <: Intan.Task
     stim_start_time::Float64
     in_stim::Bool
     c::Gtk.GtkCanvasLeaf #View Canvas
-    c2::Gtk.GtkCanvasLeaf
-    n_camera::Int32
     cam1_param::cam_param
-    cam2_param::cam_param
+    save_path::String
 end
 
 #=
@@ -56,29 +53,19 @@ function Task_CameraTask(config_path = "./config.jl")
     b = Builder(filename="./whiskertask.glade")
 
     #Camera 1
-    cam=Camera(cam_1_h,cam_1_w,1,1)
+    cam=Camera(cam_1_h,cam_1_w,"./config.json")
     cam_param1 = cam_param(cam_1_h,cam_1_w,cam_1_s)
     push!(b["cam_1_active_box"],cam_param1.c)
 
-    c=Canvas(-1,-1)
+    c=Canvas(cam_1_w,cam_1_h)
 
     push!(b["cam_1_box"], c)
-    Gtk.GAccessor.hexpand(c,true)
-    Gtk.GAccessor.vexpand(c,true)
+    #Gtk.GAccessor.hexpand(c,true)
+    #Gtk.GAccessor.vexpand(c,true)
 
-    #Camera 2
-    cam2=Camera(cam_2_h,cam_2_w,1,1)
-    cam_param2 = cam_param(cam_2_h,cam_2_w,cam_2_s)
-    push!(b["cam_2_active_box"],cam_param2.c)
 
-    c2=Canvas(-1,-1)
-
-    push!(b["cam_2_box"], c2)
-    Gtk.GAccessor.hexpand(c2,true)
-    Gtk.GAccessor.vexpand(c2,true)
-
-    handles = Task_CameraTask(cam,cam2,b,Impedance(),250,3000,0,false,
-    c,c2,num_cam,cam_param1,cam_param2)
+    handles = Task_CameraTask(cam,b,Impedance(),250,3000,0,false,
+    c,cam_param1,"")
 
     sleep(5.0)
     Gtk.showall(handles.b["win"])
@@ -94,7 +81,7 @@ function connect_cb(widget::Ptr,user_data::Tuple{Task_CameraTask})
        #change_camera_config(han.cam,path)
        #Open by serial number
        #connect(han.cam)
-       BaslerCamera.connect_camera(han.cam.cam,han.cam1_param.serial)
+       BaslerCamera.load_configuration(han.cam,han.cam.config_path)
        set_gtk_property!(han.b["cam_1_serial"],:label,han.cam1_param.serial)
 
        sleep(1.0)
@@ -102,9 +89,7 @@ function connect_cb(widget::Ptr,user_data::Tuple{Task_CameraTask})
        draw_circle(han.cam1_param,(0,1,0))
        #set_gtk_property!(han.b["cam1_connect_label"],:label,"Connected")
 
-       BaslerCamera.change_resolution(han.cam.cam,han.cam1_param.h,han.cam1_param.w)
-
-       start_acquisition(han.cam)
+       change_save_path(myt.cam.cam,han.save_path)
 
        han.cam1_param.connected = true
    end
@@ -269,7 +254,7 @@ function change_ffmpeg_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui
 
     base_path = get_gtk_property(han.save_widgets.input,:text,String)
 
-    change_ffmpeg_folder(myt.cam.cam,base_path)
+    change_save_path(myt.cam.cam,string(base_path,"/output.mp4"))
 
     nothing
 end
@@ -292,7 +277,8 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
         sleep(1.0)
 
         #Start ffmpeg
-        start_ffmpeg(myt.cam.cam)
+        #start_ffmpeg(myt.cam.cam)
+        set_record(myt.cam.cam,true)
 
         #Wait for ffmpeg to get loaded up
         sleep(1.0)
@@ -305,10 +291,12 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
         #Turn off camera
         set_gtk_property!(myt.b["view_button"],:active,false)
 
-        #Let ffmpeg finish
-        sleep(2.0)
+        #Let ffmpeg finish, I should be waiting for a done signal here.
+        sleep(5.0)
 
-        end_ffmpeg(myt.cam.cam)
+        set_record(myt.cam.cam,false)
+
+        sleep(5.0)
 
         check_alignment(rhd)
     end
@@ -342,6 +330,7 @@ end
 
 function calculate_impedance(myt,fpga)
 
+    adc_gain = get_gtk_property(myt.b["impedance_adc_gain_adj"],:value,Float64)
     adc_input=6
     stim_control_ttl=3
 
@@ -360,7 +349,7 @@ function calculate_impedance(myt,fpga)
             myt.impedance.stim_voltage=mean(fpga.adc[myt.impedance.pulses,adc_input])
 
             dv = myt.impedance.stim_voltage - myt.impedance.base_voltage
-            dv = dv * (10.24*2) / typemax(UInt16) * 1000
+            dv = dv * (10.24*2) / typemax(UInt16) * 1000 / adc_gain
             myt.impedance.impedance = round(dv / myt.impedance.current,digits=2)
             set_gtk_property!(myt.b["impedance_label"],:label,string(myt.impedance.impedance))
         else
@@ -433,8 +422,6 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
 
     signal_connect(pico_cb,myt.b["pico_button"],"toggled",Nothing,(),false,(myt,fpga[1]))
 
-    change_ffmpeg_folder(myt.cam.cam,rhd.save.folder)
-
     #For this experiment, we want to be recording voltage, timestamps, and TTLs
     set_gtk_property!(han.save_widgets.ts,:active,true)
     set_gtk_property!(han.save_widgets.volt,:active,true)
@@ -488,6 +475,8 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     Intan.setTtlMode(fpga[1],[false,false,false,true,false,false,false,false])
     Intan.manual_trigger(fpga[1],3,true)
 
+    myt.save_path = string(rhd.save.folder,"/output.mp4")
+
     nothing
 end
 
@@ -500,13 +489,15 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
 
     #Draw Picture
     if (myread)
-        (myimage,grabbed) = BaslerCamera.get_camera_data(myt.cam.cam,myt.cam1_param.h,myt.cam1_param.w,1)
 
-        if (grabbed)
+        (myimage,grabbed) = BaslerCamera.get_data(myt.cam)
+        
+        if (grabbed > 0)
             plot_image(myt,myimage,myt.cam1_param.plot_frame)
         end
 
         calculate_impedance(myt,fpga[1])
+
     end
 
     nothing

@@ -1,10 +1,10 @@
 include("/home/wanglab/Documents/WhiskerTask2/WhiskerTask.jl")
 
-sampleRate=30000
+myamp=RHD2132("PortA1")
 myt=Task_CameraTask()
-myfpga=FPGA(1,[0],usb3=true,sr=sampleRate)
+myfpga=FPGA(1,myamp,usb3=true)
 myparams=Algorithm[DetectAbs(),ClusterTemplate(49),AlignProm(),FeatureTime(),ReductionNone(),ThresholdMeanN()];
-(myrhd,ss,myfpgas)=makeRHD([myfpga],params=myparams,single_channel_mode=true,sr=sampleRate);
+(myrhd,ss,myfpgas)=makeRHD([myfpga],params=myparams);
 
 handles = makegui(myrhd,ss,myt,myfpgas);
 
