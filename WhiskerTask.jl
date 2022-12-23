@@ -439,8 +439,8 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
 
     fpga[1].d[1].numPulses=1
     fpga[1].d[1].postTriggerDelay=0
-    fpga[1].d[1].firstPhaseDuration=1000
-    fpga[1].d[1].refractoryPeriod=1000
+    fpga[1].d[1].firstPhaseDuration=1000 #1 ms
+    fpga[1].d[1].refractoryPeriod=1000 # 1 ms
     Intan.update_digital_output(fpga[1],fpga[1].d[1])
 
     #TTL 2 is laser at
@@ -453,7 +453,7 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
     fpga[1].d[2].numPulses=1
     fpga[1].d[2].postTriggerDelay=0
     fpga[1].d[2].firstPhaseDuration=2000 #2 ms
-    fpga[1].d[2].refractoryPeriod=48000
+    fpga[1].d[2].refractoryPeriod=48000 # 48 ms
     Intan.update_digital_output(fpga[1],fpga[1].d[2])
 
     #TTL 3 is juxtacellular stimulation
@@ -465,8 +465,8 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
 
     fpga[1].d[3].numPulses=1
     fpga[1].d[3].postTriggerDelay=0
-    fpga[1].d[3].firstPhaseDuration = 250000 #250 ms
-    fpga[1].d[3].refractoryPeriod = 1000000 - 250000#3 seconds
+    fpga[1].d[3].firstPhaseDuration = 250000 # 250 ms
+    fpga[1].d[3].refractoryPeriod = 1000000 - 250000 # 3 seconds
     Intan.update_digital_output(fpga[1],fpga[1].d[3])
 
     setup_pico(fpga[1])
