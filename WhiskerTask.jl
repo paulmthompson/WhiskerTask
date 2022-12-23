@@ -35,6 +35,8 @@ mutable struct Task_CameraTask <: Intan.Task
     impedance::Impedance
     pw::Int64
     period::Int64
+    pw_mult::Int64
+    period_mult::Int64
     stim_start_time::Float64
     in_stim::Bool
     c::Gtk.GtkCanvasLeaf #View Canvas
@@ -64,7 +66,7 @@ function Task_CameraTask(config_path = "./config.jl")
     #Gtk.GAccessor.vexpand(c,true)
 
 
-    handles = Task_CameraTask(cam,b,Impedance(),250,3000,0,false,
+    handles = Task_CameraTask(cam,b,Impedance(),250,1000,1000,3000,0,false,
     c,cam_param1,"")
 
     sleep(5.0)
@@ -131,21 +133,33 @@ function update_stimulation_parameters(han,fpga)
     han.period = get_gtk_property(han.b["stim_period_adj"],:value,Int64)
     num_pulses = get_gtk_property(han.b["stim_pulses_adj"],:value,Int64)
 
+    if get_gtk_property(han.b["pulse_width_combo"],:active,Int64) == 0
+        han.pw_mult = 1000
+    elseif get_gtk_property(han.b["pulse_width_combo"],:active,Int64) == 1
+        han.pw_mult = 1
+    end
+
+    if get_gtk_property(han.b["period_combo"],:active,Int64) == 0
+        han.period_mult = 1000
+    elseif get_gtk_property(han.b["period_combo"],:active,Int64) == 1
+        han.period_mult = 1
+    end
+
     if num_pulses == 1
         fpga.d[3].pulseOrTrain = 0
         fpga.d[3].numPulses = 1
 
-        fpga.d[3].firstPhaseDuration = han.pw * 1000
-        fpga.d[3].refractoryPeriod = (han.period - han.pw) * 1000
-        fpga.d[3].pulseTrainPeriod = (han.period - han.pw) * 1000
+        fpga.d[3].firstPhaseDuration = han.pw * han.pw_mult
+        fpga.d[3].refractoryPeriod = han.period * han.period_mult - han.pw * han.pw_mult
+        fpga.d[3].pulseTrainPeriod = han.period * han.period_mult - han.pw * han.pw_mult
     else
         fpga.d[3].pulseOrTrain = 1
         fpga.d[3].numPulses = num_pulses
 
-        fpga.d[3].firstPhaseDuration = han.pw * 1000
+        fpga.d[3].firstPhaseDuration = han.pw * han.pw_mult
         #this effectively sets how long until next stimulation. don't want it to be too long
         fpga.d[3].refractoryPeriod = 1e6 * 10
-        fpga.d[3].pulseTrainPeriod = han.period * 1000
+        fpga.d[3].pulseTrainPeriod = han.period * han.period_mult
     end
 
     Intan.update_digital_output(fpga,fpga.d[3])

@@ -315,7 +315,7 @@
                       <object class="GtkLabel">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
-                        <property name="label" translatable="yes">Period (ms)</property>
+                        <property name="label" translatable="yes">Period</property>
                       </object>
                       <packing>
                         <property name="left-attach">0</property>
@@ -326,7 +326,7 @@
                       <object class="GtkLabel">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
-                        <property name="label" translatable="yes">Pulse Width (ms)</property>
+                        <property name="label" translatable="yes">Pulse Width</property>
                       </object>
                       <packing>
                         <property name="left-attach">0</property>
@@ -346,39 +346,6 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="stim_pw_sb">
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="adjustment">stim_pw_adj</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
-                        <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkSpinButton" id="stim_period_sb">
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="adjustment">stim_period_adj</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
-                        <property name="top-attach">2</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkSpinButton" id="stim_num_pulses_sb">
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="adjustment">stim_pulses_adj</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
-                        <property name="top-attach">3</property>
-                      </packing>
-                    </child>
-                    <child>
                       <object class="GtkLabel">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
@@ -386,17 +353,6 @@
                       </object>
                       <packing>
                         <property name="left-attach">0</property>
-                        <property name="top-attach">5</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkSpinButton" id="stim_current_sb">
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="adjustment">impedance_current_adj</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
                         <property name="top-attach">5</property>
                       </packing>
                     </child>
@@ -467,21 +423,90 @@
                       </packing>
                     </child>
                     <child>
+                      <object class="GtkSpinButton" id="stim_pw_sb">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="adjustment">stim_pw_adj</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">2</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkSpinButton" id="stim_period_sb">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="adjustment">stim_period_adj</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">2</property>
+                        <property name="top-attach">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkSpinButton" id="stim_num_pulses_sb">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="adjustment">stim_pulses_adj</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">2</property>
+                        <property name="top-attach">3</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkSpinButton" id="stim_current_sb">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="adjustment">impedance_current_adj</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">2</property>
+                        <property name="top-attach">5</property>
+                      </packing>
+                    </child>
+                    <child>
                       <object class="GtkSpinButton" id="impedance_adc_gain_sb">
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="adjustment">impedance_adc_gain_adj</property>
                       </object>
                       <packing>
-                        <property name="left-attach">1</property>
+                        <property name="left-attach">2</property>
                         <property name="top-attach">6</property>
                       </packing>
                     </child>
                     <child>
-                      <placeholder/>
+                      <object class="GtkComboBoxText" id="pulse_width_combo">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="active">0</property>
+                        <property name="active-id">0</property>
+                        <items>
+                          <item translatable="yes">ms</item>
+                          <item translatable="yes">us</item>
+                        </items>
+                      </object>
+                      <packing>
+                        <property name="left-attach">1</property>
+                        <property name="top-attach">1</property>
+                      </packing>
                     </child>
                     <child>
-                      <placeholder/>
+                      <object class="GtkComboBoxText" id="period_combo">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="active">0</property>
+                        <items>
+                          <item translatable="yes">ms</item>
+                          <item translatable="yes">us</item>
+                        </items>
+                      </object>
+                      <packing>
+                        <property name="left-attach">1</property>
+                        <property name="top-attach">2</property>
+                      </packing>
                     </child>
                     <child>
                       <placeholder/>
