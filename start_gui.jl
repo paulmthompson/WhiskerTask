@@ -1,4 +1,4 @@
-include("/home/wanglab/Documents/WhiskerTask2/WhiskerTask.jl")
+include("/home/wanglab/Documents/WhiskerTask/WhiskerTask.jl")
 
 sampleRate=30000
 myt=Task_CameraTask()

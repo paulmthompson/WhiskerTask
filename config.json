@@ -4,7 +4,9 @@
             "name": "camera 1",
             "type": "basler",
             "serial-number": "22636053",
-            "config-filepath": "./config.pfs"
+            "config-filepath": "./config.pfs",
+            "height": 480,
+            "width": 640
         }
     ]
 }

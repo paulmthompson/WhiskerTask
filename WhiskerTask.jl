@@ -1,4 +1,4 @@
-using Intan, SpikeSorting, Gtk.ShortNames, Cairo,BaslerCamera, StatsBase
+using Intan, SpikeSorting, Gtk.ShortNames, Cairo,BaslerCamera, StatsBase, JSON
 import Intan
 
 mutable struct Impedance
@@ -48,11 +48,15 @@ end
 Constructors for data type
 =#
 
-function Task_CameraTask(config_path = "./config.jl")
-
-    include(config_path)
+function Task_CameraTask(config_path = "./config.json")
 
     b = Builder(filename="./whiskertask.glade")
+
+    config_json = JSON.parsefile(config_path)
+
+    cam_1_h = config_json["cameras"][1]["height"]
+    cam_1_w = config_json["cameras"][1]["width"]
+    cam_1_s = config_json["cameras"][1]["serial-number"]
 
     #Camera 1
     cam=Camera(cam_1_h,cam_1_w,"./config.json")
