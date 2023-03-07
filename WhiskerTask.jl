@@ -1,4 +1,4 @@
-using Intan, SpikeSorting, Gtk.ShortNames, Cairo,BaslerCamera, StatsBase, JSON
+using Intan, SpikeSorting, Gtk.ShortNames, Cairo,BaslerCamera, StatsBase, JSON, FFMPEG
 import Intan
 
 mutable struct Impedance
@@ -42,6 +42,10 @@ mutable struct Task_CameraTask <: Intan.Task
     c::Gtk.GtkCanvasLeaf #View Canvas
     cam1_param::cam_param
     save_path::String
+
+    #Logic for camera startup and shutdown
+    task_state::Int64 #State 0 is inactive. 
+
 end
 
 #=
@@ -71,7 +75,7 @@ function Task_CameraTask(config_path = "./config.json")
 
 
     handles = Task_CameraTask(cam,b,Impedance(),250,1000,1000,3000,0,false,
-    c,cam_param1,"")
+    c,cam_param1,"",0)
 
     sleep(5.0)
     Gtk.showall(handles.b["win"])
