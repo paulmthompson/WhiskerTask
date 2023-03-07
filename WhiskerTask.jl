@@ -332,7 +332,8 @@ function check_alignment(rhd)
 
     vid_path = string(rhd.save.folder,"/output.mp4")
 
-    xx=read(`mediainfo --Output="Video;%FrameCount%" $(vid_path)`)
+    xx=@ffmpeg_env read(`$(FFMPEG.ffprobe) -v error -select_streams v:0 -show_entries stream=nb_frames -of default=nokey=1:noprint_wrappers=1 $(vid_path)`)
+
     if length(xx) < 2
         video_frames = 0
     else
