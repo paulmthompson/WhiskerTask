@@ -44,8 +44,14 @@ mutable struct Task_CameraTask <: Intan.Task
     save_path::String
 
     #Logic for camera startup and shutdown
-    task_state::Int64 #State 0 is inactive. 
-
+    #State 0 is inactive. 
+    #State 1 is flushing camera
+    #State 2 is turning on camera
+    #State 3 is recording
+    #State 4 is turning off ffmpeg
+    #State 5 is checking alignment
+    task_state::Int64 
+    task_timer::Int64
 end
 
 #=
@@ -75,7 +81,7 @@ function Task_CameraTask(config_path = "./config.json")
 
 
     handles = Task_CameraTask(cam,b,Impedance(),250,1000,1000,3000,0,false,
-    c,cam_param1,"",0)
+    c,cam_param1,"",0,0)
 
     sleep(5.0)
     Gtk.showall(handles.b["win"])
@@ -285,42 +291,29 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
 
     myt,han,fpga,rhd = user_data
 
-    if get_gtk_property(han.record,:active,Bool)
+    if get_gtk_property(han.record,:active,Bool) #Recording is set to active
+
+        myt.task_state = 1
+        myt.task_timer = 50
 
         #we may want to make sure that the ttl box is checked. Perhaps this one should be on by default?
 
         #If camera is in view mode, we will be collecting frames already
         #Turn off briefly
+        println("Flushing Camera")
         if get_gtk_property(myt.b["view_button"],:active,Bool)
             set_gtk_property!(myt.b["view_button"],:active,false)
         end
 
-        #We wait here for everything to power down. Ideally we could flush the camera
-        sleep(1.0)
-
-        #Start ffmpeg
-        #start_ffmpeg(myt.cam.cam)
-        set_record(myt.cam.cam,true)
-
-        #Wait for ffmpeg to get loaded up
-        sleep(1.0)
-
-        #Start TTL
-        set_gtk_property!(myt.b["view_button"],:active,true)
-
     else #turn off
 
+        myt.task_state = 4
+        myt.task_timer = 100
+
         #Turn off camera
-        set_gtk_property!(myt.b["view_button"],:active,false)
+        println("Turning off camera")
+        set_gtk_property!(myt.b["view_button"],:active,false) #Turn off TTL
 
-        #Let ffmpeg finish, I should be waiting for a done signal here.
-        sleep(5.0)
-
-        set_record(myt.cam.cam,false)
-
-        sleep(5.0)
-
-        check_alignment(rhd)
     end
 
     nothing
@@ -512,6 +505,47 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
 
     #Draw Picture
     if (myread)
+
+        if (myt.task_state == 1) #Warm up logic
+            if (myt.task_timer > 0)
+                myt.task_timer -= 1
+            else
+                myt.task_state += 1
+                myt.task_timer = 50
+                println("Starting FFMPEG")
+                set_record(myt.cam.cam,true) #Start ffmpeg
+            end
+        elseif (myt.task_state == 2)
+            if (myt.task_timer > 0)
+                myt.task_timer -= 1
+            else
+                myt.task_state += 1
+                myt.task_timer = 0
+                println("Triggering Camera")
+                set_gtk_property!(myt.b["view_button"],:active,true) #start camera TTL
+            end
+        elseif (myt.task_state == 3)
+
+        elseif (myt.task_state == 4) # Turn off ffmpeg after TTL finished
+            if (myt.task_timer > 0)
+                myt.task_timer -= 1
+            else 
+                myt.task_state += 1
+                myt.task_timer = 50
+                println("Turning off FFMPEG")
+                set_record(myt.cam.cam,false) #Turn off ffmpeg
+            end
+        elseif (myt.task_state == 5) #check alignment 
+            if (myt.task_timer > 0)
+                myt.task_timer -= 1
+            else
+                myt.task_state = 0
+                myt.task_timer = 0
+                println("Checking Alignment")
+                check_alignment(rhd)
+            end
+        end
+
 
         (myimage,grabbed) = BaslerCamera.get_data(myt.cam)
         
