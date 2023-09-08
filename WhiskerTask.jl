@@ -53,6 +53,7 @@ mutable struct Task_CameraTask <: Intan.Task
     task_state::Int64 
     task_timer::Int64
     acquired_frames::Int64
+    frame_rate::Int64
 end
 
 #=
@@ -80,9 +81,26 @@ function Task_CameraTask(config_path = "./config.json")
     #Gtk.GAccessor.hexpand(c,true)
     #Gtk.GAccessor.vexpand(c,true)
 
+    frame_rate = config_json["cameras"][1]["frame-rate"]
 
-    handles = Task_CameraTask(cam,b,Impedance(),250,1000,1000,3000,0,false,
-    c,cam_param1,"",0,0,0)
+    handles = Task_CameraTask(
+        cam,
+        b,
+        Impedance(),
+        250,
+        1000,
+        1000,
+        3000,
+        0,
+        false,
+        c,
+        cam_param1,
+        "",
+        0,
+        0,
+        0,
+        frame_rate
+        )
 
     sleep(5.0)
     Gtk.showall(handles.b["win"])
@@ -321,28 +339,44 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
     nothing
 end
 
+function count_camera_ttls(ttl_filepath,ttl_input_index)
+
+    ttl_input = Intan.parse_ttl(ttl_filepath)[ttl_input_index]
+
+    ttl_transition_times_ticks = findall(diff(ttl_input.>1))
+
+    length(ttl_transition_times_ticks)
+end
+
 function check_alignment(rhd)
 
-    analog_path = rhd.save.ttl
+    ttl_filepath = rhd.save.ttl
 
     vid_path = string(rhd.save.folder,"/output.mp4")
 
-    xx=@ffmpeg_env read(`$(FFMPEG.ffprobe) -v error -select_streams v:0 -show_entries stream=nb_frames -of default=nokey=1:noprint_wrappers=1 $(vid_path)`)
+    frame_number_byte=@ffmpeg_env read(`$(FFMPEG.ffprobe)
+     -v error 
+     -select_streams v:0 
+     -show_entries stream=nb_frames 
+     -of default=nokey=1:noprint_wrappers=1 
+     $(vid_path)`)
 
-    if length(xx) < 2
+    if length(frame_number_byte) < 2
         video_frames = 0
     else
-        video_frames=parse(Int64,String(xx[1:(end-1)]))
+        video_frames=parse(Int64,String(frame_number_byte[1:(end-1)]))
     end
 
-    analog_size=length(findall(diff(Intan.parse_ttl(analog_path)[2]).>1))
+    cam_input_ttl_index = 2
+
+    total_camera_ttls = length(findall(diff(Intan.parse_ttl(ttl_filepath)[cam_input_ttl_index]).>1))
 
     println("Video Frames: ", video_frames)
-    println("Analog Data: ", analog_size)
-    if (video_frames == analog_size)
+    println("Analog Data: ", total_camera_ttls)
+    if (video_frames == total_camera_ttls)
         println("Yay, frames match!")
     else
-        println("Boo! Frame mismatch by ", abs(video_frames-analog_size))
+        println("Boo! Frame mismatch by ", abs(video_frames-total_camera_ttls))
     end
 end
 
@@ -457,8 +491,18 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
 
     fpga[1].d[1].numPulses=1
     fpga[1].d[1].postTriggerDelay=0
-    fpga[1].d[1].firstPhaseDuration=1000 #1 ms
-    fpga[1].d[1].refractoryPeriod=1000 # 1 ms
+
+    if myt.frame_rate == 500
+        println("Frame rate set to 500")
+        fpga[1].d[1].firstPhaseDuration=1000 #1 ms
+        fpga[1].d[1].refractoryPeriod=1000 # 1 ms
+    elseif myt.frame_rate == 2000
+        println("Frame rate set to 500")
+        fpga[1].d[1].firstPhaseDuration=250 #us
+        fpga[1].d[1].refractoryPeriod=250 #us
+    else 
+        println("Frame rate ", myt.frame_rate, " not supported")
+    end
     Intan.update_digital_output(fpga[1],fpga[1].d[1])
 
     #TTL 2 is laser at
