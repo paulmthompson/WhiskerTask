@@ -4,10 +4,11 @@
             "name": "camera 1",
             "type": "basler",
             "serial-number": "22636053",
-            "config-filepath": "./config.pfs",
-            "height": 480,
-            "width": 640,
-            "frame-rate": 500 
+            "conf1ig-filepath": "./config.pfs",
+            "config-filepath": "./whisker_2000fps.pfs",
+            "height": 256,
+            "width": 256,
+            "frame-rate": 2000
         }
     ]
 }

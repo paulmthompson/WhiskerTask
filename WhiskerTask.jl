@@ -497,7 +497,7 @@ function Intan.init_task(myt::Task_CameraTask,rhd::Intan.RHD2000,han,fpga)
         fpga[1].d[1].firstPhaseDuration=1000 #1 ms
         fpga[1].d[1].refractoryPeriod=1000 # 1 ms
     elseif myt.frame_rate == 2000
-        println("Frame rate set to 500")
+        println("Frame rate set to 2000")
         fpga[1].d[1].firstPhaseDuration=250 #us
         fpga[1].d[1].refractoryPeriod=250 #us
     else 
@@ -552,7 +552,12 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
     #Draw Picture
     if (myread)
 
-        (myimage,grabbed) = BaslerCamera.get_data(myt.cam)
+        # There is currently a bug in the CameraManager library where the data to hold
+        #The camera frame does not change from 480x640.
+        (myimage,grabbed) = BaslerCamera.get_camera_data(myt.cam.cam,480,640)
+        myimage = myimage[1:(256*256)]
+        myimage = reshape(myimage,(256,256))
+        #(myimage,grabbed) = BaslerCamera.get_data(myt.cam)
 
         if (myt.task_state == 1) #Warm up logic
             if (myt.task_timer > 0)
