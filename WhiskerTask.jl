@@ -52,6 +52,7 @@ mutable struct Task_CameraTask <: Intan.Task
     #State 5 is checking alignment
     task_state::Int64 
     task_timer::Int64
+    acquired_frames::Int64
 end
 
 #=
@@ -81,7 +82,7 @@ function Task_CameraTask(config_path = "./config.json")
 
 
     handles = Task_CameraTask(cam,b,Impedance(),250,1000,1000,3000,0,false,
-    c,cam_param1,"",0,0)
+    c,cam_param1,"",0,0,0)
 
     sleep(5.0)
     Gtk.showall(handles.b["win"])
@@ -295,6 +296,7 @@ function recording_cb(widget::Ptr,user_data::Tuple{Task_CameraTask,Intan.Gui_Han
 
         myt.task_state = 1
         myt.task_timer = 50
+        myt.acquired_frames = 0
 
         #we may want to make sure that the ttl box is checked. Perhaps this one should be on by default?
 
@@ -506,6 +508,8 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
     #Draw Picture
     if (myread)
 
+        (myimage,grabbed) = BaslerCamera.get_data(myt.cam)
+
         if (myt.task_state == 1) #Warm up logic
             if (myt.task_timer > 0)
                 myt.task_timer -= 1
@@ -526,7 +530,14 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
             end
         elseif (myt.task_state == 3)
 
+            myt.acquired_frames = myt.acquired_frames + grabbed
+            println("Acquired ", myt.acquired_frames, " frames")
+
         elseif (myt.task_state == 4) # Turn off ffmpeg after TTL finished
+
+            myt.acquired_frames = myt.acquired_frames + grabbed
+            println("Acquired ", myt.acquired_frames, " frames")
+
             if (myt.task_timer > 0)
                 myt.task_timer -= 1
             else 
@@ -536,6 +547,10 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
                 set_record(myt.cam.cam,false) #Turn off ffmpeg
             end
         elseif (myt.task_state == 5) #check alignment 
+
+            myt.acquired_frames = myt.acquired_frames + grabbed
+            println("Acquired ", myt.acquired_frames, " frames")
+
             if (myt.task_timer > 0)
                 myt.task_timer -= 1
             else
@@ -545,9 +560,6 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
                 check_alignment(rhd)
             end
         end
-
-
-        (myimage,grabbed) = BaslerCamera.get_data(myt.cam)
         
         if (grabbed > 0)
             plot_image(myt,myimage,myt.cam1_param.plot_frame)
