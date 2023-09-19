@@ -554,10 +554,10 @@ function Intan.do_task(myt::Task_CameraTask,rhd::Intan.RHD2000,myread,han,fpga)
 
         # There is currently a bug in the CameraManager library where the data to hold
         #The camera frame does not change from 480x640.
-        (myimage,grabbed) = BaslerCamera.get_camera_data(myt.cam.cam,480,640)
-        myimage = myimage[1:(256*256)]
-        myimage = reshape(myimage,(256,256))
-        #(myimage,grabbed) = BaslerCamera.get_data(myt.cam)
+        #(myimage,grabbed) = BaslerCamera.get_camera_data(myt.cam.cam,480,640)
+        #myimage = myimage[1:(256*256)]
+        #myimage = reshape(myimage,(256,256))
+        (myimage,grabbed) = BaslerCamera.get_data(myt.cam)
 
         if (myt.task_state == 1) #Warm up logic
             if (myt.task_timer > 0)
